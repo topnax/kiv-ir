@@ -85,7 +85,7 @@ class RedditScraper:
 
                 if len(text) > 0:
                     # check whether the text is non-zero length (the thing is not of an image type)
-                    post = {"title": title, "text": text, "timestamp": timestamp, "score": score, "comments_count": comments_count, "author": author} 
+                    post = {"title": title, "text": text, "timestamp": timestamp, "score": score, "comments_count": comments_count, "author": author, "link": self.get_url(thing_target)} 
                     posts.append(post)
                     scraped_posts = scraped_posts + 1
                     print(f"SCRAPED - {scraped_posts}/{self.target_post_count}\n")
