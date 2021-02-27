@@ -108,6 +108,8 @@ class RedditScraper:
                 target_queue.append(next_target)
             else:
                 print("OUT OF POSTS :(")
+                if scraped_posts == 0:
+                    print("Did you select an existing subreddit?")
 
             if not cached:
                 # be polite!!!
@@ -194,7 +196,8 @@ if __name__ == "__main__":
     subreddit = args.subreddit
 
     if args.output_file is None:
-        args.output_file = f"{args.output_file}.json"
+        print("non")
+        args.output_file = f"{subreddit}.json"
 
     # init cache
     cache = ResourceCache(args.cache_folder, subreddit)
@@ -208,14 +211,15 @@ if __name__ == "__main__":
     # perform scraping
     posts = scraper.scrape()
 
-    # dump loaded post
-    json = json.dumps(posts)
+    if len(posts) > 0:
+        # dump loaded post
+        json = json.dumps(posts)
 
-    # store posts in a file
-    output_file_name = args.output_file
-    with open(output_file_name, "w") as output_file: 
-        output_file.write(json)
-        print(f"\nOUTPUT SAVED TO {output_file_name}")
+        # store posts in a file
+        output_file_name = args.output_file
+        with open(output_file_name, "w") as output_file: 
+            output_file.write(json)
+            print(f"\nOUTPUT SAVED TO {output_file_name}")
 
 
 
