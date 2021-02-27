@@ -220,5 +220,3 @@ if __name__ == "__main__":
             output_file.write(json)
             print(f"\nOUTPUT SAVED TO {output_file_name}")
 
-
-
