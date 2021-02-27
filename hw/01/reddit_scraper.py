@@ -1,4 +1,5 @@
 import requests, bs4, os
+import argparse
 import time
 import json
 from datetime import date
@@ -14,8 +15,8 @@ class RedditScraper:
         self.target_post_count = target_post_count
         self.cache = cache
         self.headers = {
-            'User-Agent': 'ADA Agent',
-            'From': 'charles.hoskinson@cardano.org'
+            'User-Agent': 'Reddit Rocks',
+            'From': 'redditor@seznam.cz'
         }
         self.politeness_timeout = politeness_timeout
 
@@ -29,63 +30,93 @@ class RedditScraper:
         
         while target_queue and scraped_posts < self.target_post_count:
             target = target_queue.pop()
-            
+
+            print("FETCHING A NEW THING LIST...")
+
+            # fetch the posts page target
             (page_data, cached) = self.fetch_target(target)
 
+            # parse the xml tree
             tree = etree.HTML(page_data)
 
-            text = tree.xpath('//div[contains(@class, "thing")]/div[contains(@class, "entry")]//p[contains(@class, "title")]/a/text()')
+            # find all things (posts)
             things = tree.xpath('//div[contains(@class, "thing")]')
+
+            # exclude video things
             non_video_things = [thing for thing in things if not "data-kind" in thing.attrib or thing.attrib["data-kind"] != "video"]
 
+            # iterate over things and scrape title, text, timestamp, author, score, and comment
             for thing in non_video_things:
-                next_target = thing.attrib["data-permalink"].replace(f"/r/{self.subreddit}", "")
-                (thing_page_data, thing_cached) = self.fetch_target(next_target)
+                # scrape the link to the thing detail
+                thing_target = thing.attrib["data-permalink"].replace(f"/r/{self.subreddit}", "")
+
+                # fetch the thing detail
+                (thing_page_data, thing_cached) = self.fetch_target(thing_target)
+
+                # parse the xml tree of the thing
                 thing_tree = etree.HTML(thing_page_data)
+
+                # parse title
                 title = thing_tree.xpath('string(//p[contains(@class, "title")]/a[contains(@class, "title")])')
+
+                # parse title
                 text = thing_tree.xpath('string((//div[contains(@class, "sitetable")])[1]//div[contains(@class, "usertext-body")])')
 
+                # parse timestamp
                 timestamp = thing_tree.xpath('(//div[contains(@class, "sitetable")])[1]//div[contains(@class, "thing")]/@data-timestamp')[0]
 
+                # parse author
                 author = thing_tree.xpath('(//div[contains(@class, "sitetable")])[1]//div[contains(@class, "thing")]/@data-author')[0]
+
+                # parse score
                 score = thing_tree.xpath('(//div[contains(@class, "sitetable")])[1]//div[contains(@class, "thing")]/@data-score')[0]
+
+                # parse the count of comments
                 comments_count = thing_tree.xpath('(//div[contains(@class, "sitetable")])[1]//div[contains(@class, "thing")]/@data-comments-count')[0]
-                
 
 
                 if len(text) > 0:
-                    post = {"title": title, "text": text, "timestamp": timestamp, "score": score, "comments_count": comments_count} 
+                    # check whether the text is non-zero length (the thing is not of an image type)
+                    post = {"title": title, "text": text, "timestamp": timestamp, "score": score, "comments_count": comments_count, "author": author} 
                     posts.append(post)
                     scraped_posts = scraped_posts + 1
-                    print(f"SCRAPED {scraped_posts}/{self.target_post_count}")
+                    print(f"SCRAPED - {scraped_posts}/{self.target_post_count}")
             
                 if not thing_cached:
+                    # be polite!!!
                     time.sleep(self.politeness_timeout)
 
                 if scraped_posts >= self.target_post_count:
                     break
 
-
+            # find the link to the next page of things
             next_page_link = tree.xpath('//div[contains(@class, "nav-buttons")]//span[contains(@class, "next-button")]/a/@href')
-            next_target = next_page_link[0].replace(self.get_base_url(), "")
-            target_queue.append(next_target)
-            posts_loaded = len(text)
+
+            # a link to the next page exists
+            if next_page_link is not empty:
+                next_target = next_page_link[0].replace(self.get_base_url(), "")
+                target_queue.append(next_target)
+                posts_loaded = len(text)
+            else:
+                print("OUT OF POSTS :(")
 
             if not cached:
+                # be polite!!!
                 time.sleep(self.politeness_timeout)
                 
         return posts
 
     def fetch_target(self, target):
+        # check whether the target is already cachced
         page_data = self.cache.get_resource(target)
         cached = False
         if page_data is None:  
+            # if not then fetch it
             link = self.get_url(target) 
-            print(f"fetching: {link}")
+            print(e"FETCHING - {link}")
             response = requests.get(f"{link}", headers=self.headers)
-
             page_data = response.text
-            
+            # add the page to the cache
             self.cache.add_resource(target, page_data) 
         else:
             cached = True
@@ -103,7 +134,11 @@ class ResourceCache:
 
     def __init__(self, cache_folder, subdirectory):
         base_folder = f"{cache_folder}/{subdirectory}"
+        # initialize cache
         self.base_folder = base_folder
+        if not os.path.exists(cache_folder):
+            os.mkdir(cache_folder)
+
         if not os.path.exists(base_folder):
             os.mkdir(base_folder)
 
@@ -119,6 +154,7 @@ class ResourceCache:
             resource_file.write(resource) 
 
     def get_resource(self, resource_name):
+        # check whether the resource is already cached
         resource_name = self.sanitize_name(resource_name)
         resource_path = f"{self.base_folder}/{resource_name}"
         if os.path.exists(resource_path):
@@ -129,9 +165,16 @@ class ResourceCache:
 
 
 if __name__ == "__main__":
-    subreddit = "cardano"
-    cache = ResourceCache("cache", subreddit)
-    scraper = RedditScraper(subreddit, 550, cache)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(dest='subreddit', type=str, help="The subbredit to scrape")
+
+    # Retur the input via different parameter name
+    parser.add_argument('-c', '--count', dest='posts_count', default=50)
+    parser.add_argument('-cf', '--cache-folder', dest='cache_folder', default="cache")
+
+    subreddit = parser.subreddit
+    cache = ResourceCache(parser.cache_folder, parser.subreddit)
+    scraper = RedditScraper(subreddit, 550, cache, 0.5)
     posts = scraper.scrape()
     json = json.dumps(posts)
     with open(f"{subreddit}.json", "w") as output_file: 
