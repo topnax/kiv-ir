@@ -19,7 +19,7 @@ class RedditScraper:
             'From': 'redditor@seznam.cz'
         }
         self.politeness_timeout = politeness_timeout
-
+        self.ignore_stickied = ignore_stickied
 
     def scrape(self):
         target_queue = ["/"] 
@@ -43,11 +43,18 @@ class RedditScraper:
             # find all things (posts)
             things = tree.xpath('//div[contains(@class, "thing")]')
 
-            # exclude video and promoted things
-            non_video_things = [thing for thing in things if thing.attrib.get("data-kind", "") != "video" and thing.attrib.get("data-promoted", "false") != "true"]
-
             # iterate over things and scrape title, text, timestamp, author, score, and comment
-            for thing in non_video_things:
+            for thing in things:
+
+                if thing.attrib.get("data-kind", "") == "video":
+                    continue
+
+                if thing.attrib.get("data-promoted", "false") == "true":
+                    continue
+
+                if self.ignore_stickied and thing.attrib.get("data-rank") == "":
+                    continue
+
                 # scrape the link to the thing detail
                 thing_target = thing.attrib["data-permalink"].replace(f"/r/{self.subreddit}", "")
 
@@ -99,7 +106,6 @@ class RedditScraper:
             if len(next_page_link) > 0:
                 next_target = next_page_link[0].replace(self.get_base_url(), "")
                 target_queue.append(next_target)
-                posts_loaded = len(text)
             else:
                 print("OUT OF POSTS :(")
 
@@ -178,13 +184,10 @@ if __name__ == "__main__":
     # Retur the input via different parameter name
     parser.add_argument('-c', '--count', dest='posts_count', type=int, default=50)
     parser.add_argument('-cf', '--cache-folder', dest='cache_folder', default="cache")
-    parser.add_argument('-pt', '--politeness-timeout', dest='politiness_timeout', type=float, default=0.33)
+    parser.add_argument('-pt', '--politeness-timeout', dest='politeness_timeout', type=float, default=0.33)
     parser.add_argument('-o', '--output', dest='output_file')
-    # TODO use refresh argument
     parser.add_argument('-r', '--refresh', action="store_true", help="Refreshes the main page of the subreddit")
-
-    # TODO use ignore stickied posts
-    parser.add_argument('-is', '--ignore-stickied', dest='ignore_stickied', default=True)
+    parser.add_argument('-ks', '--keep-stickied', action="store_true", help="Keep stickied posts")
 
     args = parser.parse_args()
 
@@ -193,14 +196,22 @@ if __name__ == "__main__":
     if args.output_file is None:
         args.output_file = f"{args.output_file}.json"
 
+    # init cache
     cache = ResourceCache(args.cache_folder, subreddit)
 
     if args.refresh:
         cache.remove_resource(subreddit, "#")
 
-    scraper = RedditScraper(subreddit, args.posts_count, cache, args.ignore_stickied, args.politiness_timeout)
+    # init scraper
+    scraper = RedditScraper(subreddit, args.posts_count, cache, not args.keep_stickied, args.politeness_timeout)
+
+    # perform scraping
     posts = scraper.scrape()
+
+    # dump loaded post
     json = json.dumps(posts)
+
+    # store posts in a file
     output_file_name = args.output_file
     with open(output_file_name, "w") as output_file: 
         output_file.write(json)
