@@ -1,6 +1,8 @@
 # Simple Reddit scraper
 - written in Python
 - stores downloaded webpages to a cache to reduce the number of network calls when run multiple times to scrape the same subreddit
+- can be used to scrape any subreddit
+    - scrapes only text posts
 ## Usage
 ```
 $ python3 reddit_scraper.py cardano --count 5
