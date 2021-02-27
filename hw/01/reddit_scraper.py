@@ -196,7 +196,6 @@ if __name__ == "__main__":
     subreddit = args.subreddit
 
     if args.output_file is None:
-        print("non")
         args.output_file = f"{subreddit}.json"
 
     # init cache
