@@ -10,7 +10,7 @@ SUBREDDIT_POSTS_PAGE = "https://old.reddit.com/r/"
 
 class RedditScraper:
 
-    def __init__(self, subreddit, target_post_count, cache, politeness_timeout=1):
+    def __init__(self, subreddit, target_post_count, cache, ignore_stickied, politeness_timeout=1):
         self.subreddit = subreddit
         self.target_post_count = target_post_count
         self.cache = cache
@@ -165,6 +165,11 @@ class ResourceCache:
                 return resource_file.read() 
         return None
 
+    def remove_resource(self, resource_group, resource):
+        resource_path = f"{self.base_folder}/{resource}"
+        if os.path.exists(resource_path):
+            os.remove(resource_path)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -176,7 +181,7 @@ if __name__ == "__main__":
     parser.add_argument('-pt', '--politeness-timeout', dest='politiness_timeout', type=float, default=0.33)
     parser.add_argument('-o', '--output', dest='output_file')
     # TODO use refresh argument
-    parser.add_argument('-r', '--refresh', dest='refresh', default=False)
+    parser.add_argument('-r', '--refresh', action="store_true", help="Refreshes the main page of the subreddit")
 
     # TODO use ignore stickied posts
     parser.add_argument('-is', '--ignore-stickied', dest='ignore_stickied', default=True)
@@ -189,7 +194,11 @@ if __name__ == "__main__":
         args.output_file = f"{args.output_file}.json"
 
     cache = ResourceCache(args.cache_folder, subreddit)
-    scraper = RedditScraper(subreddit, args.posts_count, cache, args.politiness_timeout)
+
+    if args.refresh:
+        cache.remove_resource(subreddit, "#")
+
+    scraper = RedditScraper(subreddit, args.posts_count, cache, args.ignore_stickied, args.politiness_timeout)
     posts = scraper.scrape()
     json = json.dumps(posts)
     output_file_name = args.output_file
